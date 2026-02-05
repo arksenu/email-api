@@ -12,6 +12,76 @@ export interface EmailMapping {
   completed_at: Date | null;
 }
 
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface MappingFilters {
+  status?: string;
+  workflow?: string;
+  sender?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export async function getAllMappings(
+  page: number = 1,
+  pageSize: number = 20,
+  filters: MappingFilters = {}
+): Promise<PaginatedResult<EmailMapping>> {
+  const offset = (page - 1) * pageSize;
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  let paramIndex = 1;
+
+  if (filters.status) {
+    conditions.push(`status = $${paramIndex++}`);
+    params.push(filters.status);
+  }
+  if (filters.workflow) {
+    conditions.push(`workflow = $${paramIndex++}`);
+    params.push(filters.workflow);
+  }
+  if (filters.sender) {
+    conditions.push(`LOWER(original_sender) LIKE $${paramIndex++}`);
+    params.push(`%${filters.sender.toLowerCase()}%`);
+  }
+  if (filters.dateFrom) {
+    conditions.push(`created_at >= $${paramIndex++}`);
+    params.push(filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    conditions.push(`created_at <= $${paramIndex++}`);
+    params.push(filters.dateTo);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const countResult = await queryOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM email_mappings ${whereClause}`,
+    params
+  );
+  const total = parseInt(countResult?.count || '0', 10);
+
+  const dataParams = [...params, pageSize, offset];
+  const data = await query<EmailMapping>(
+    `SELECT * FROM email_mappings ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+    dataParams
+  );
+
+  return {
+    data,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
 export async function createMapping(
   originalMessageId: string | null,
   originalSender: string,

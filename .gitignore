@@ -4,3 +4,7 @@ dist/
 *.log
 .DS_Store
 .claude/
+
+# Admin frontend build
+admin/dist/
+admin/node_modules/
