@@ -52,12 +52,20 @@ export async function getAllWorkflows(): Promise<WorkflowStats[]> {
 
 export async function updateWorkflow(
   id: number,
-  updates: { description?: string; credits_per_task?: number; is_active?: boolean }
+  updates: { name?: string; manus_address?: string; description?: string; credits_per_task?: number; is_active?: boolean }
 ): Promise<Workflow | null> {
   const setClauses: string[] = [];
   const params: (string | number | boolean)[] = [];
   let paramIndex = 1;
 
+  if (updates.name !== undefined) {
+    setClauses.push(`name = $${paramIndex++}`);
+    params.push(updates.name.toLowerCase());
+  }
+  if (updates.manus_address !== undefined) {
+    setClauses.push(`manus_address = $${paramIndex++}`);
+    params.push(updates.manus_address);
+  }
   if (updates.description !== undefined) {
     setClauses.push(`description = $${paramIndex++}`);
     params.push(updates.description);

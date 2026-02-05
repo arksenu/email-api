@@ -225,8 +225,8 @@ adminRouter.get('/workflows/:id', async (req: Request, res: Response) => {
 adminRouter.patch('/workflows/:id', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { description, credits_per_task, is_active } = req.body;
-    const workflow = await updateWorkflow(id, { description, credits_per_task, is_active });
+    const { name, manus_address, description, credits_per_task, is_active } = req.body;
+    const workflow = await updateWorkflow(id, { name, manus_address, description, credits_per_task, is_active });
     if (!workflow) {
       res.status(404).json({ error: 'Workflow not found' });
       return;

@@ -136,6 +136,8 @@ export default function Workflows() {
   const [loading, setLoading] = useState(true);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
   const [formData, setFormData] = useState({
+    name: '',
+    manus_address: '',
     description: '',
     credits_per_task: 1,
     is_active: true,
@@ -155,6 +157,8 @@ export default function Workflows() {
   const openEdit = (workflow: Workflow) => {
     setEditingWorkflow(workflow);
     setFormData({
+      name: workflow.name,
+      manus_address: workflow.manus_address,
       description: workflow.description || '',
       credits_per_task: workflow.credits_per_task,
       is_active: workflow.is_active,
@@ -226,24 +230,66 @@ export default function Workflows() {
       {editingWorkflow && (
         <div style={styles.modal} onClick={() => setEditingWorkflow(null)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2 style={styles.modalTitle}>Edit {editingWorkflow.name}</h2>
+            <h2 style={styles.modalTitle}>Edit Workflow</h2>
             <form style={styles.form} onSubmit={handleEdit}>
-              <textarea
-                style={styles.textarea}
-                placeholder="Description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-              <input
-                style={styles.input}
-                type="number"
-                placeholder="Credits per task"
-                min="1"
-                value={formData.credits_per_task}
-                onChange={(e) =>
-                  setFormData({ ...formData, credits_per_task: parseInt(e.target.value) || 1 })
-                }
-              />
+              <div>
+                <label style={{ fontSize: '12px', color: '#666', marginBottom: '4px', display: 'block' }}>
+                  Workflow Name (email prefix)
+                </label>
+                <input
+                  style={styles.input}
+                  type="text"
+                  placeholder="e.g. research"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
+                  Users send to: {formData.name || 'name'}@mail.fly-bot.net
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: '#666', marginBottom: '4px', display: 'block' }}>
+                  Manus Address
+                </label>
+                <input
+                  style={styles.input}
+                  type="email"
+                  placeholder="e.g. arksenu-research@manus.bot"
+                  value={formData.manus_address}
+                  onChange={(e) => setFormData({ ...formData, manus_address: e.target.value })}
+                  required
+                />
+                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
+                  Emails forwarded to this Manus workflow
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: '#666', marginBottom: '4px', display: 'block' }}>
+                  Description
+                </label>
+                <textarea
+                  style={styles.textarea}
+                  placeholder="What this workflow does..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: '#666', marginBottom: '4px', display: 'block' }}>
+                  Credits per Task
+                </label>
+                <input
+                  style={styles.input}
+                  type="number"
+                  placeholder="Credits per task"
+                  min="1"
+                  value={formData.credits_per_task}
+                  onChange={(e) =>
+                    setFormData({ ...formData, credits_per_task: parseInt(e.target.value) || 1 })
+                  }
+                />
+              </div>
               <label style={styles.label}>
                 <input
                   type="checkbox"
