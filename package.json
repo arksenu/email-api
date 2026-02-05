@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "dev:admin": "cd admin && npm run dev",
-    "migrate": "psql $DATABASE_URL -f migrations/001_initial.sql && psql $DATABASE_URL -f migrations/002_admin.sql",
+    "migrate": "docker exec -i email-api-db-1 psql -U flybot -d flybot -f /docker-entrypoint-initdb.d/001_initial.sql && docker exec -i email-api-db-1 psql -U flybot -d flybot -f /docker-entrypoint-initdb.d/002_admin.sql && docker exec -i email-api-db-1 psql -U flybot -d flybot -f /docker-entrypoint-initdb.d/003_custom_workflows.sql",
     "seed": "ts-node scripts/seed-workflows.ts",
     "seed:admin": "ts-node scripts/seed-admin.ts"
   },

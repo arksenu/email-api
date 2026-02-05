@@ -8,6 +8,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   JWT_SECRET: z.string().min(32),
+  MANUS_API_KEY: z.string().min(1),
+  MANUS_AGENT_PROFILE: z.enum(['manus-1.6', 'manus-1.6-lite', 'manus-1.6-max']).default('manus-1.6'),
 });
 
 function loadConfig() {
