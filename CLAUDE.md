@@ -202,7 +202,7 @@ Required in `.env`:
 **Features**:
 - Dashboard: Overview stats (users, workflows, tasks, credits)
 - Users: CRUD operations, credit adjustments, approval management
-- Workflows: View/edit workflow settings (credits_per_task, is_active)
+- Workflows: View/edit workflow settings (name, manus_address, credits_per_task, description, is_active)
 - Activity: Email task history with filters, transaction log
 
 **Setup**:
@@ -215,7 +215,8 @@ Required in `.env`:
 - GET /stats - Dashboard statistics
 - GET/POST/PATCH/DELETE /users - User CRUD
 - POST /users/:id/credits - Adjust credits
-- GET/PATCH /workflows - Workflow management
+- GET /workflows - List all workflows
+- PATCH /workflows/:id - Update workflow (name, manus_address, credits_per_task, description, is_active)
 - GET /mappings - Email task history (filterable)
 - GET /transactions - Credit transaction log
 

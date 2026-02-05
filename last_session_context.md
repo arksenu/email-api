@@ -4,7 +4,7 @@
 2026-02-04
 
 ## What We Built
-Phase 1 of Fly-Bot Email API - an email mediator service that wraps Manus.im's Mail Manus feature.
+Phase 1 of Fly-Bot Email API - an email mediator service that wraps Manus.im's Mail Manus feature, plus a full admin panel for managing users, workflows, and monitoring activity.
 
 ## Architecture
 ```
@@ -38,17 +38,20 @@ User email → research@mail.fly-bot.net
 - ✅ Bounce emails for rejected requests
 - ✅ Email forwarding to Manus (arksenu-research@manus.bot)
 - ✅ Mapping stored in database
-
-### What's Not Tested Yet
-- ⏳ Manus response handling (need to add relay@mail.fly-bot.net to Manus approved senders)
-- ⏳ Branding stripping
-- ⏳ Credit deduction on completion
+- ✅ Manus response handling
+- ✅ Branding stripping
+- ✅ Credit deduction on completion
+- ✅ Admin panel (React + Vite)
+  - Dashboard with stats
+  - User CRUD + credit adjustments + approval
+  - Workflow editing (name, manus_address, credits_per_task, description, is_active)
+  - Activity log (email tasks + transactions)
+  - JWT authentication
 
 ### Not Implemented (Phase 2+)
-- User registration API
-- Login/auth API
+- User registration API (public)
+- Login/auth API (public)
 - Credit purchase (Stripe)
-- Admin panel
 - Webhook signature verification
 - Rate limiting
 - Tests
@@ -71,8 +74,8 @@ MX mail.fly-bot.net → mx.sendgrid.net (priority 10)
 - Webhook URL: `https://<ngrok-url>/webhooks/email/inbound`
 - Note: ngrok URL changes on restart
 
-### Manus Configuration (TODO)
-- Add approved sender: `relay@mail.fly-bot.net`
+### Manus Configuration
+- Approved sender: `relay@mail.fly-bot.net` (configured)
 - Workflow emails use prefix: `arksenu-*@manus.bot`
 
 ### Database
@@ -85,42 +88,61 @@ email-api/
 ├── src/
 │   ├── index.ts          # Express entry
 │   ├── config.ts         # Env validation
-│   ├── api/routes.ts     # Webhook endpoint
+│   ├── api/
+│   │   ├── routes.ts     # Webhook endpoint
+│   │   └── admin/
+│   │       ├── routes.ts     # Admin API endpoints
+│   │       └── middleware.ts # JWT auth
 │   ├── db/               # Database queries
 │   │   ├── client.ts
 │   │   ├── users.ts
 │   │   ├── workflows.ts
-│   │   └── mappings.ts
+│   │   ├── mappings.ts
+│   │   ├── admins.ts
+│   │   └── transactions.ts
 │   └── email/            # Email processing
 │       ├── inbound.ts    # User email handler
 │       ├── response.ts   # Manus response handler
-│       ├── outbound.ts   # SendGrid sending (with DEBUG logging)
-│       ├── parser.ts     # Webhook parsing (with DEBUG logging)
+│       ├── outbound.ts   # SendGrid sending
+│       ├── parser.ts     # Webhook parsing
 │       └── branding.ts   # Strip Manus branding + ack detection
-├── migrations/001_initial.sql
-├── scripts/seed-workflows.ts
+├── admin/                # React admin frontend (Vite)
+│   ├── src/
+│   │   ├── pages/        # Login, Dashboard, Users, Workflows, Activity
+│   │   ├── components/   # Layout
+│   │   └── lib/api.ts    # API client
+│   └── vite.config.ts
+├── migrations/
+│   ├── 001_initial.sql
+│   └── 002_admin.sql
+├── scripts/
+│   ├── seed-workflows.ts
+│   └── seed-admin.ts
 ├── docker-compose.yml
 ├── Dockerfile
 └── .env
 ```
 
-## Completed During Session
-1. ✅ Added relay@mail.fly-bot.net to Manus approved senders
-2. ✅ Configured SendGrid Inbound Parse for mail.fly-bot.net subdomain
-3. ✅ Configured SendGrid domain authentication for mail.fly-bot.net
-4. ✅ Tested full email round-trip (user → workflow → Manus → relay → user)
-5. ✅ Verified acknowledgment detection (skips Manus ack messages)
-6. ✅ Verified branding stripping (subject and body cleaned)
-7. ✅ Verified credit deduction on task completion
-8. ✅ Updated environment variables (RELAY_ADDRESS, FROM_DOMAIN to use mail.fly-bot.net)
-9. ✅ Added DEBUG logging to parser.ts and outbound.ts for troubleshooting
-10. ✅ Tested multiple workflows (research, summarize, newsletter)
+## Completed During Session (2026-02-05)
+1. ✅ Built admin panel (React + Vite + react-router-dom)
+2. ✅ Added JWT authentication for admin API
+3. ✅ Created admin user seeding script (ADMIN_PASSWORD env var)
+4. ✅ Implemented user CRUD with credit adjustments and approval
+5. ✅ Implemented full workflow editing (name, manus_address, credits_per_task, description, is_active)
+6. ✅ Added activity monitoring (email tasks + transactions)
+7. ✅ Fixed Vite proxy for local development (port 3001)
+8. ✅ Updated documentation (CLAUDE.md, CHANGELOG.md)
 
-## Files Modified This Session
-- src/email/branding.ts - Added acknowledgment indicators for Manus messages
-- src/email/parser.ts - Added DEBUG logging and stripHtml fallback
-- src/email/outbound.ts - Added SendGrid error logging
-- .env - Updated RELAY_ADDRESS and FROM_DOMAIN to mail.fly-bot.net
+## Files Modified/Created This Session
+- admin/ - New React admin frontend
+- src/api/admin/routes.ts - Admin API endpoints
+- src/api/admin/middleware.ts - JWT auth middleware
+- src/db/admins.ts - Admin authentication model
+- src/db/workflows.ts - Extended updateWorkflow() for name/manus_address
+- src/db/transactions.ts - Transaction queries
+- migrations/002_admin.sql - Admin table
+- scripts/seed-admin.ts - Admin user seeder
+- admin/vite.config.ts - Proxy to port 3001 for local dev
 
 ## Next Steps (Future)
 1. Deploy to permanent server (replace ngrok)
@@ -128,20 +150,32 @@ email-api/
 3. Add webhook signature verification
 4. Add retry logic for failed email sends
 5. Add rate limiting
-6. Build user registration API
+6. Build user registration API (public)
 7. Build payment integration (Stripe)
-8. Build admin panel for user approval
-9. Add monitoring/alerting
-10. Write tests
+8. Add monitoring/alerting
+9. Write tests
 
 ## Running the App
+
+### Production (Docker)
 ```bash
-# Start
 docker compose up
+# Admin at http://localhost:3000/admin
+```
 
-# In another terminal, expose via ngrok
+### Local Development (with hot reload)
+```bash
+# Terminal 1: Backend on port 3001
+PORT=3001 npm run dev
+
+# Terminal 2: Vite frontend with hot reload
+npm run dev:admin
+# Admin at http://localhost:5173/admin
+```
+
+### Email Testing (ngrok)
+```bash
 ngrok http 3000
-
 # Update SendGrid webhook URL when ngrok restarts
 ```
 

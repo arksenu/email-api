@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Changed
+- Admin panel workflow editing now supports updating workflow name and manus_address fields
+- PATCH /admin/api/workflows/:id endpoint accepts name and manus_address updates
+- Workflows page displays editable form fields for name and manus_address
+- Vite proxy configuration updated to target backend on port 3001
+
 ## [1.0.0] - 2026-02-04
 
 ### Added
@@ -24,6 +32,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Health check endpoint at GET /health
 - Workflow seeding script
 - Database migration system
+- Admin platform with React frontend and JWT authentication
+- Admin dashboard with statistics overview
+- User management: CRUD operations, credit adjustments, approval toggle
+- Workflow management: View and edit workflow settings
+- Activity monitoring: Email task history and transaction log
 
 ### Changed
 - Updated RELAY_ADDRESS from relay@fly-bot.net to relay@mail.fly-bot.net
