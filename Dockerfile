@@ -4,6 +4,8 @@ COPY package*.json ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
+COPY admin ./admin
+RUN cd admin && npm ci
 RUN npm run build
 
 FROM node:20-alpine

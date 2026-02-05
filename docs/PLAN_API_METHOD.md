@@ -154,7 +154,6 @@ export async function setUserPassword(userId: number, password: string): Promise
 ```env
 MANUS_API_KEY=your_api_key
 MANUS_AGENT_PROFILE=manus-1.6
-MANUS_WEBHOOK_SECRET=optional_webhook_secret
 ```
 
 ### File: `src/config.ts`
@@ -163,7 +162,6 @@ Add validation:
 ```typescript
 MANUS_API_KEY: z.string(),
 MANUS_AGENT_PROFILE: z.enum(['manus-1.6', 'manus-1.6-lite', 'manus-1.6-max']).default('manus-1.6'),
-MANUS_WEBHOOK_SECRET: z.string().optional(),
 ```
 
 ### File: `src/manus/client.ts` (new)
@@ -222,16 +220,25 @@ export async function downloadAttachment(url: string): Promise<Buffer> {
   if (!res.ok) throw new Error(`Download failed: ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
+
+export async function getPublicKey(): Promise<{ public_key: string; algorithm: string }> {
+  const res = await fetch(`${MANUS_API_BASE}/webhook/public_key`, {
+    headers: { 'Authorization': `Bearer ${config.MANUS_API_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Failed to fetch public key: ${res.status}`);
+  return res.json();
+}
 ```
 
 ### File: `src/manus/webhook.ts` (new)
 
 ```typescript
+import crypto from 'crypto';
 import { getMappingByTaskId, completeMapping } from '../db/mappings';
-import { deductCredits, getUserById } from '../db/users';
-import { getTask, downloadAttachment } from './client';
+import { deductCredits, getUserByEmail } from '../db/users';
+import { getTask, downloadAttachment, getPublicKey } from './client';
 import { sendEmail } from '../email/outbound';
-import { getWorkflowByName } from '../db/workflows';
+import { config } from '../config';
 
 interface TaskStoppedPayload {
   event_type: 'task_stopped';
@@ -245,7 +252,59 @@ interface TaskStoppedPayload {
   }>;
 }
 
-export async function handleManusWebhook(payload: TaskStoppedPayload): Promise<void> {
+// Cache public key (refresh every hour)
+let cachedPublicKey: string | null = null;
+let publicKeyFetchedAt = 0;
+const PUBLIC_KEY_TTL = 60 * 60 * 1000; // 1 hour
+
+async function getManusPublicKey(): Promise<string> {
+  const now = Date.now();
+  if (cachedPublicKey && now - publicKeyFetchedAt < PUBLIC_KEY_TTL) {
+    return cachedPublicKey;
+  }
+  const { public_key } = await getPublicKey();
+  cachedPublicKey = public_key;
+  publicKeyFetchedAt = now;
+  return public_key;
+}
+
+export function verifyWebhookSignature(
+  signature: string,
+  timestamp: string,
+  url: string,
+  body: string,
+  publicKey: string
+): boolean {
+  // Check timestamp within 5 minutes (prevent replay attacks)
+  const ts = parseInt(timestamp, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - ts) > 300) {
+    console.error('Webhook timestamp outside 5-minute window');
+    return false;
+  }
+
+  // Build signature string: {timestamp}.{url}.{sha256(body)}
+  const bodyHash = crypto.createHash('sha256').update(body).digest('hex');
+  const signatureString = `${timestamp}.${url}.${bodyHash}`;
+
+  // Verify RSA-SHA256 signature
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(signatureString);
+  return verifier.verify(publicKey, signature, 'base64');
+}
+
+export async function handleManusWebhook(
+  payload: TaskStoppedPayload,
+  headers: { signature: string; timestamp: string },
+  url: string,
+  rawBody: string
+): Promise<void> {
+  // 1. Verify webhook signature
+  const publicKey = await getManusPublicKey();
+  if (!verifyWebhookSignature(headers.signature, headers.timestamp, url, rawBody, publicKey)) {
+    throw new Error('Invalid webhook signature');
+  }
+
   if (payload.event_type !== 'task_stopped') return;
   if (payload.stop_reason !== 'finish') {
     console.log(`Task ${payload.task_id} needs input, skipping`);
@@ -356,11 +415,28 @@ export async function handleInboundEmail(email: ParsedEmail): Promise<void> {
 Add webhook endpoint:
 
 ```typescript
+import express from 'express';
 import { handleManusWebhook } from '../manus/webhook';
 
-router.post('/webhooks/manus', async (req, res) => {
+// Use raw body for signature verification
+router.post('/webhooks/manus', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
-    await handleManusWebhook(req.body);
+    const rawBody = req.body.toString('utf8');
+    const payload = JSON.parse(rawBody);
+
+    // Build full URL for signature verification
+    const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+
+    await handleManusWebhook(
+      payload,
+      {
+        signature: req.headers['x-webhook-signature'] as string,
+        timestamp: req.headers['x-webhook-timestamp'] as string,
+      },
+      url,
+      rawBody
+    );
+
     res.status(200).send('OK');
   } catch (err) {
     console.error('Manus webhook error:', err);
@@ -405,7 +481,7 @@ adminRouter.post('/workflows', async (req, res) => {
 
   const workflow = await createWorkflow({
     name: name.toLowerCase(),
-    manus_address: 'arksenu@manus.bot', // Legacy field
+    manus_address: 'arksenu@manus.bot', // Legacy field // but make sure to keep the original 3 workflows summarize, newsletter, research as native
     description,
     instruction,
     credits_per_task: credits_per_task || 10,

@@ -1,7 +1,7 @@
 import { config } from '../config';
 import { getUserByEmail } from '../db/users';
 import { getWorkflowByName, Workflow } from '../db/workflows';
-import { createMapping, updateManusTaskId } from '../db/mappings';
+import { createMapping, updateManusTaskId, getMappingByMessageId } from '../db/mappings';
 import { isApprovedSender } from '../db/approvedSenders';
 import { sendEmail, sendBounce } from './outbound';
 import { ParsedEmail, extractWorkflow } from './parser';
@@ -45,6 +45,14 @@ export async function handleInboundEmail(email: ParsedEmail): Promise<void> {
     console.log(`Rejected: insufficient credits for ${sender} (has ${user.credits}, needs ${workflowConfig.credits_per_task})`);
     await sendBounce(sender, `Insufficient credits. Balance: ${user.credits}, Required: ${workflowConfig.credits_per_task}`);
     return;
+  }
+
+  if (email.messageId) {
+    const existingMapping = await getMappingByMessageId(email.messageId);
+    if (existingMapping) {
+      console.log(`Duplicate webhook: mapping already exists for message ${email.messageId}`);
+      return;
+    }
   }
 
   const mapping = await createMapping(email.messageId, sender, workflow);
