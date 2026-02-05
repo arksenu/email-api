@@ -7,6 +7,7 @@ const envSchema = z.object({
   RELAY_ADDRESS: z.string().email().default('relay@fly-bot.net'),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  JWT_SECRET: z.string().min(32),
 });
 
 function loadConfig() {

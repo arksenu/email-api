@@ -31,11 +31,10 @@ Currently running on **ngrok** (temporary). Webhook URL must be updated in SendG
 
 ### Not Implemented (Future Phases)
 
-- User registration API (users manually added to database)
-- Login/authentication API
+- User registration API (users manually added to database or via admin panel)
+- User login/authentication API
 - User dashboard or credit balance API
 - Stripe payment integration for purchasing credits
-- Admin panel for approving users
 - Webhook signature verification (SendGrid signed events)
 - Retry logic for failed email sends
 - Dead letter queue for unmatched responses

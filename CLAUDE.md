@@ -50,12 +50,17 @@ Fly-Bot Email API: TypeScript/Express service that acts as an email proxy for Ma
 email-api/
 ├── src/
 │   ├── api/
-│   │   └── routes.ts          # Express router with webhook endpoints
+│   │   ├── routes.ts          # Express router with webhook endpoints
+│   │   └── admin/
+│   │       ├── routes.ts      # Admin API endpoints
+│   │       └── middleware.ts  # JWT auth middleware
 │   ├── db/
 │   │   ├── client.ts          # PostgreSQL connection pool
 │   │   ├── users.ts           # User model and queries
 │   │   ├── workflows.ts       # Workflow model and queries
-│   │   └── mappings.ts        # Email mapping model and queries
+│   │   ├── mappings.ts        # Email mapping model and queries
+│   │   ├── admins.ts          # Admin authentication model
+│   │   └── transactions.ts    # Transaction query functions
 │   ├── email/
 │   │   ├── inbound.ts         # Incoming email handler
 │   │   ├── outbound.ts        # Outgoing email sender
@@ -64,10 +69,19 @@ email-api/
 │   │   └── branding.ts        # Email footer branding
 │   ├── config.ts              # Environment variable validation
 │   └── index.ts               # Express application entry point
+├── admin/                     # React admin frontend (Vite)
+│   ├── src/
+│   │   ├── pages/             # Login, Dashboard, Users, Workflows, Activity
+│   │   ├── components/        # Layout components
+│   │   └── lib/api.ts         # API client with JWT auth
+│   ├── package.json
+│   └── vite.config.ts
 ├── migrations/
-│   └── 001_initial.sql        # Database schema
+│   ├── 001_initial.sql        # Database schema
+│   └── 002_admin.sql          # Admin table
 ├── scripts/
-│   └── seed-workflows.ts      # Seed Manus workflow configurations
+│   ├── seed-workflows.ts      # Seed Manus workflow configurations
+│   └── seed-admin.ts          # Create initial admin user
 ├── docker-compose.yml         # PostgreSQL + app orchestration
 ├── Dockerfile                 # Multi-stage production build
 ├── tsconfig.json              # TypeScript compiler options
@@ -79,15 +93,18 @@ email-api/
 ```bash
 # Development
 npm install              # Install dependencies
-npm run dev              # Run with ts-node (hot reload not configured)
+npm run dev              # Run backend with ts-node
+cd admin && npm install  # Install admin frontend dependencies
+npm run dev:admin        # Run admin frontend dev server (port 5173)
 
 # Production
-npm run build            # Compile TypeScript to dist/
+npm run build            # Compile backend + admin frontend
 npm start                # Run compiled JavaScript
 
 # Database
-npm run migrate          # Apply migrations (requires PostgreSQL)
+npm run migrate          # Apply all migrations (requires PostgreSQL)
 npm run seed             # Seed workflow data
+npm run seed:admin       # Create admin user (set ADMIN_PASSWORD env var)
 
 # Docker
 docker-compose up        # Start app + PostgreSQL
@@ -101,6 +118,7 @@ docker-compose down      # Stop all services
 **workflows**: id, name (unique), manus_address, description, credits_per_task, is_active
 **email_mappings**: id, original_message_id, original_sender, workflow, manus_message_id, status, credits_charged, created_at, completed_at
 **transactions**: id, user_id, credits_delta, reason, email_mapping_id, created_at
+**admins**: id, username (unique), password_hash, created_at
 
 ## Environment Variables
 
@@ -111,6 +129,8 @@ Required in `.env`:
 - `RELAY_ADDRESS`: Address for Manus responses (relay@mail.fly-bot.net)
 - `PORT`: Server port (default 3000)
 - `NODE_ENV`: development | production
+- `JWT_SECRET`: Secret for admin JWT tokens (min 32 chars)
+- `ADMIN_PASSWORD`: (optional) Password for seed script
 
 ## Architecture Notes
 
@@ -174,3 +194,33 @@ Required in `.env`:
 - research: 1 credit per task
 - summarize: 1 credit per task
 - newsletter: 2 credits per task
+
+## Admin Platform
+
+**URL**: http://localhost:3000/admin (or /admin on production)
+
+**Features**:
+- Dashboard: Overview stats (users, workflows, tasks, credits)
+- Users: CRUD operations, credit adjustments, approval management
+- Workflows: View/edit workflow settings (name, manus_address, credits_per_task, description, is_active)
+- Activity: Email task history with filters, transaction log
+
+**Setup**:
+1. Run `npm run migrate` to create admins table
+2. Run `ADMIN_PASSWORD=yourpassword npm run seed:admin` to create admin user
+3. Access /admin and login with username: admin
+
+**API Endpoints** (all prefixed with /admin/api):
+- POST /auth/login - Get JWT token
+- GET /stats - Dashboard statistics
+- GET/POST/PATCH/DELETE /users - User CRUD
+- POST /users/:id/credits - Adjust credits
+- GET /workflows - List all workflows
+- PATCH /workflows/:id - Update workflow (name, manus_address, credits_per_task, description, is_active)
+- GET /mappings - Email task history (filterable)
+- GET /transactions - Credit transaction log
+
+**Tech Stack**:
+- Backend: Express + JWT (jsonwebtoken, bcrypt)
+- Frontend: React 18 + Vite + react-router-dom
+- Auth: Bearer token in Authorization header, 24h expiry

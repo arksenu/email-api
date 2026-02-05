@@ -49,6 +49,7 @@ users (id, email, credits, is_approved, created_at)
 workflows (id, name, manus_address, description, credits_per_task, is_active)
 email_mappings (id, original_message_id, original_sender, workflow, manus_message_id, status, credits_charged, created_at, completed_at)
 transactions (id, user_id, credits_delta, reason, email_mapping_id, created_at)
+admins (id, username, password_hash, created_at)
 ```
 
 ## Tech Stack
@@ -61,8 +62,21 @@ transactions (id, user_id, credits_delta, reason, email_mapping_id, created_at)
 ## Endpoints
 
 ```
-POST /api/webhook/inbound    # SendGrid Inbound Parse webhook
-GET  /health                 # Health check
+POST /webhooks/email/inbound     # SendGrid Inbound Parse webhook
+GET  /health                     # Health check
+
+# Admin API (JWT protected)
+POST   /admin/api/auth/login     # Get JWT token
+GET    /admin/api/stats          # Dashboard statistics
+GET    /admin/api/users          # List users
+POST   /admin/api/users          # Create user
+PATCH  /admin/api/users/:id      # Update user
+DELETE /admin/api/users/:id      # Delete user
+POST   /admin/api/users/:id/credits  # Adjust credits
+GET    /admin/api/workflows      # List workflows
+PATCH  /admin/api/workflows/:id  # Update workflow
+GET    /admin/api/mappings       # Email task history
+GET    /admin/api/transactions   # Transaction log
 ```
 
 ## Environment Variables
@@ -74,13 +88,22 @@ FROM_DOMAIN
 RELAY_ADDRESS
 PORT
 NODE_ENV
+JWT_SECRET          # For admin authentication
+ADMIN_PASSWORD      # Optional, for seed script
 ```
+
+## Implemented (Beyond MVP)
+
+- ✅ Admin dashboard (React + Vite)
+  - User management (CRUD, credits, approval)
+  - Workflow configuration (name, manus_address, credits_per_task)
+  - Activity monitoring (email tasks, transactions)
+  - JWT authentication
 
 ## Out of Scope (Phase 2+)
 
-- User registration/login API
+- User registration/login API (public)
 - Payment/Stripe integration
-- Admin dashboard
 - Email threading/conversation context
 - Rate limiting
 - Metrics/monitoring
