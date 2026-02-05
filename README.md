@@ -29,11 +29,18 @@ Currently running on **ngrok** (temporary). Webhook URL must be updated in SendG
 
 **Production deployment needed**: Requires permanent server with static webhook URL.
 
+### Implemented
+
+- ✅ **User registration and login**: User portal with JWT authentication (7-day tokens)
+- ✅ **User dashboard**: Account overview with credits, approval status, usage history
+- ✅ **Community workflows**: Users can create custom workflows with API method support
+- ✅ **Workflow directory**: Browse public native, official, and community workflows
+- ✅ **Approved senders**: Manage email access for private workflows
+- ✅ **Paginated history**: Usage and transaction logs with pagination
+- ✅ **Admin platform**: Full admin panel for user/workflow/activity management
+
 ### Not Implemented (Future Phases)
 
-- User registration API (users manually added to database or via admin panel)
-- User login/authentication API
-- User dashboard or credit balance API
 - Stripe payment integration for purchasing credits
 - Webhook signature verification (SendGrid signed events)
 - Retry logic for failed email sends
@@ -185,11 +192,18 @@ docker compose exec db psql -U flybot -d flybot -c "SELECT email, credits FROM u
 ## Commands
 
 - `npm install` - Install dependencies
-- `npm run build` - Compile TypeScript to JavaScript
-- `npm run dev` - Run development server with ts-node
+- `npm run build` - Compile TypeScript + build admin + portal frontends
+- `npm run build:admin` - Build admin frontend only
+- `npm run build:portal` - Build portal frontend only
+- `npm run dev` - Run backend only with ts-node
+- `npm run dev:backend` - Run database + backend (via scripts/dev.sh)
+- `npm run dev:all` - Run database + backend + admin + portal (via scripts/dev-all.sh)
+- `npm run dev:admin` - Run admin frontend dev server (port 5173)
+- `npm run dev:portal` - Run portal frontend dev server (port 5174)
 - `npm start` - Run compiled production server
 - `npm run migrate` - Run database migrations
 - `npm run seed` - Seed workflow data (creates research, summarize, newsletter workflows)
+- `npm run seed:admin` - Create admin user (set ADMIN_PASSWORD env var)
 - `docker-compose up` - Start with Docker (app + PostgreSQL)
 - `docker-compose up -d db` - Start only PostgreSQL
 - `docker-compose logs -f app` - View application logs
@@ -200,12 +214,17 @@ docker compose exec db psql -U flybot -d flybot -c "SELECT email, credits FROM u
 email-api/
 ├── src/
 │   ├── api/           # Express routes and handlers
+│   │   ├── routes.ts      # Webhook endpoints
+│   │   ├── admin/         # Admin API and middleware
+│   │   └── user/          # User API and middleware
 │   ├── db/            # Database client and models
 │   ├── email/         # Email parsing, sending, branding
 │   ├── config.ts      # Environment configuration
 │   └── index.ts       # Application entry point
+├── admin/             # React admin frontend (Vite)
+├── portal/            # React user portal (Vite)
 ├── migrations/        # SQL migration files
-├── scripts/           # Utility scripts (seeding, etc.)
+├── scripts/           # Utility scripts (seeding, dev helpers)
 ├── docker-compose.yml # Docker orchestration
 ├── Dockerfile         # Application container
 └── tsconfig.json      # TypeScript configuration

@@ -58,9 +58,29 @@ export async function getAllTransactions(
   };
 }
 
-export async function getTransactionsByUser(userId: number): Promise<Transaction[]> {
-  return query<Transaction>(
-    'SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC',
+export async function getTransactionsByUser(
+  userId: number,
+  page: number = 1,
+  pageSize: number = 20
+): Promise<PaginatedResult<Transaction>> {
+  const offset = (page - 1) * pageSize;
+
+  const countResult = await queryOne<{ count: string }>(
+    'SELECT COUNT(*) as count FROM transactions WHERE user_id = $1',
     [userId]
   );
+  const total = parseInt(countResult?.count || '0', 10);
+
+  const data = await query<Transaction>(
+    'SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+    [userId, pageSize, offset]
+  );
+
+  return {
+    data,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
 }

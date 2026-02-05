@@ -169,9 +169,22 @@ export async function updateManusTaskId(id: number, taskId: string): Promise<voi
   );
 }
 
-export async function completeMapping(id: number, creditsCharged: number): Promise<void> {
-  await query(
-    'UPDATE email_mappings SET status = $1, credits_charged = $2, completed_at = NOW() WHERE id = $3',
-    ['completed', creditsCharged, id]
+export async function claimMapping(id: number): Promise<boolean> {
+  const rows = await query<EmailMapping>(
+    `UPDATE email_mappings SET status = 'processing'
+     WHERE id = $1 AND status NOT IN ('processing', 'completed')
+     RETURNING id`,
+    [id]
   );
+  return rows.length > 0;
+}
+
+export async function completeMapping(id: number, creditsCharged: number): Promise<boolean> {
+  const rows = await query<EmailMapping>(
+    `UPDATE email_mappings SET status = 'completed', credits_charged = $1, completed_at = NOW()
+     WHERE id = $2 AND status != 'completed'
+     RETURNING id`,
+    [creditsCharged, id]
+  );
+  return rows.length > 0;
 }

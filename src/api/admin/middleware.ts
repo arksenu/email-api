@@ -5,6 +5,7 @@ import { config } from '../../config';
 export interface AdminPayload {
   id: number;
   username: string;
+  role: 'admin';
 }
 
 declare global {
@@ -27,6 +28,10 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 
   try {
     const payload = jwt.verify(token, config.JWT_SECRET) as AdminPayload;
+    if (payload.role !== 'admin') {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
     req.admin = payload;
     next();
   } catch {
@@ -34,6 +39,6 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 }
 
-export function signToken(payload: AdminPayload): string {
-  return jwt.sign(payload, config.JWT_SECRET, { expiresIn: '24h' });
+export function signToken(payload: Omit<AdminPayload, 'role'>): string {
+  return jwt.sign({ ...payload, role: 'admin' }, config.JWT_SECRET, { expiresIn: '24h' });
 }

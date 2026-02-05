@@ -12,6 +12,13 @@ export interface User {
   password_hash: string | null;
 }
 
+export type SafeUser = Omit<User, 'password_hash'>;
+
+export function sanitizeUser<T extends User>(user: T): Omit<T, 'password_hash'> {
+  const { password_hash, ...safe } = user;
+  return safe;
+}
+
 export interface UserStats extends User {
   total_tasks: number;
   pending_tasks: number;

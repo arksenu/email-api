@@ -8,11 +8,12 @@ import {
   updateUser,
   deleteUser,
   addCredits,
+  sanitizeUser,
 } from '../../db/users';
 import {
   getAllWorkflows,
   getWorkflowById,
-  getWorkflowByName,
+  isWorkflowNameTaken,
   updateWorkflow,
   createWorkflow,
   deleteWorkflow,
@@ -112,7 +113,7 @@ adminRouter.get('/users', async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 20;
     const result = await getAllUsers(page, pageSize);
-    res.json(result);
+    res.json({ ...result, data: result.data.map(sanitizeUser) });
   } catch (err) {
     console.error('Get users error:', err);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -127,7 +128,7 @@ adminRouter.get('/users/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (err) {
     console.error('Get user error:', err);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -142,7 +143,7 @@ adminRouter.post('/users', async (req: Request, res: Response) => {
       return;
     }
     const user = await createUser(email, credits || 0, is_approved || false);
-    res.status(201).json(user);
+    res.status(201).json(sanitizeUser(user));
   } catch (err: any) {
     if (err.code === '23505') {
       res.status(409).json({ error: 'Email already exists' });
@@ -162,7 +163,7 @@ adminRouter.patch('/users/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (err: any) {
     if (err.code === '23505') {
       res.status(409).json({ error: 'Email already exists' });
@@ -201,7 +202,7 @@ adminRouter.post('/users/:id/credits', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (err) {
     console.error('Add credits error:', err);
     res.status(500).json({ error: 'Failed to add credits' });
@@ -243,8 +244,8 @@ adminRouter.post('/workflows', async (req: Request, res: Response) => {
       return;
     }
 
-    const existing = await getWorkflowByName(name);
-    if (existing) {
+    const taken = await isWorkflowNameTaken(name);
+    if (taken) {
       res.status(409).json({ error: 'Workflow name already exists' });
       return;
     }

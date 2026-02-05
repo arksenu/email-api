@@ -325,10 +325,15 @@ export default function Workflows() {
 
   const openSenders = async (workflow: Workflow) => {
     setSelectedWorkflow(workflow);
-    const senders = await getApprovedSenders(workflow.id);
-    setApprovedSenders(senders);
-    setNewSenderEmail('');
-    setModalType('senders');
+    try {
+      const senders = await getApprovedSenders(workflow.id);
+      setApprovedSenders(senders);
+      setNewSenderEmail('');
+      setError('');
+      setModalType('senders');
+    } catch (err: any) {
+      setError(err.message || 'Failed to load approved senders');
+    }
   };
 
   const closeModal = () => {
@@ -709,6 +714,7 @@ export default function Workflows() {
         <div style={styles.modal} onClick={closeModal}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2 style={styles.modalTitle}>Delete Workflow</h2>
+            {error && <div style={{ ...styles.warning, marginBottom: '12px', color: '#dc3545' }}>{error}</div>}
             <div style={styles.warning}>
               Are you sure you want to delete <strong>{selectedWorkflow.name}</strong>? This action
               cannot be undone.

@@ -6,7 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- User portal React frontend with registration, login, dashboard, workflow directory, and account management
+- User API routes under /api: register, login, profile, usage/transactions (paginated), workflow CRUD, approved senders
+- User authentication with JWT tokens (7-day expiry, separate from admin 24h tokens)
+- Community workflow creation: users can create custom workflows with API method support
+- Workflow directory: browse public native/official/community workflows
+- Workflow privacy controls: public/private workflows with approved sender management
+- Paginated usage history and transaction logs for users
+- User portal pages: Login, Register, Dashboard, Directory, MyWorkflows, Account
+- Build scripts: build:portal, dev:portal, dev:backend, dev:all
+- Development scripts: scripts/dev.sh (db + backend), scripts/dev-all.sh (db + backend + admin + portal)
+- Portal served at /portal in production, localhost:5174/portal in development
+- Pagination support for getTransactionsByUser in src/db/transactions.ts
+
 ### Changed
+- src/index.ts now serves user portal static files and user API routes
 - Admin panel workflow editing now supports updating workflow name and manus_address fields
 - PATCH /admin/api/workflows/:id endpoint accepts name and manus_address updates
 - Workflows page displays editable form fields for name and manus_address

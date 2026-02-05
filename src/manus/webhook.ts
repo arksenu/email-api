@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getMappingByTaskId, completeMapping } from '../db/mappings';
+import { getMappingByTaskId, claimMapping, completeMapping } from '../db/mappings';
 import { deductCredits, getUserByEmail, createTransaction } from '../db/users';
 import { getTask, downloadAttachment, getPublicKey } from './client';
 import { sendEmail } from '../email/outbound';
@@ -48,7 +48,17 @@ export function verifyWebhookSignature(
   body: string,
   publicKey: string
 ): boolean {
+  if (!signature || !timestamp) {
+    console.error('Webhook missing signature or timestamp header');
+    return false;
+  }
+
   const ts = parseInt(timestamp, 10);
+  if (isNaN(ts)) {
+    console.error('Webhook timestamp is not a valid number');
+    return false;
+  }
+
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - ts) > 300) {
     console.error('Webhook timestamp outside 5-minute window');
@@ -104,6 +114,12 @@ export async function handleManusWebhook(
   const mapping = await getMappingByTaskId(detail.task_id);
   if (!mapping) {
     console.error(`No mapping found for task ${detail.task_id}`);
+    return;
+  }
+
+  const claimed = await claimMapping(mapping.id);
+  if (!claimed) {
+    console.log(`Mapping ${mapping.id} already processing/completed, skipping duplicate webhook`);
     return;
   }
 
