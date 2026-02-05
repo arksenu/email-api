@@ -194,7 +194,7 @@ export async function createTask(req: CreateTaskRequest): Promise<CreateTaskResp
   const res = await fetch(`${MANUS_API_BASE}/tasks`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${config.MANUS_API_KEY}`,
+      'API_KEY': config.MANUS_API_KEY,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -209,7 +209,7 @@ export async function createTask(req: CreateTaskRequest): Promise<CreateTaskResp
 
 export async function getTask(taskId: string): Promise<GetTaskResponse> {
   const res = await fetch(`${MANUS_API_BASE}/tasks/${taskId}`, {
-    headers: { 'Authorization': `Bearer ${config.MANUS_API_KEY}` },
+    headers: { 'API_KEY': config.MANUS_API_KEY },
   });
   if (!res.ok) throw new Error(`Manus API error: ${res.status}`);
   return res.json();
@@ -223,7 +223,7 @@ export async function downloadAttachment(url: string): Promise<Buffer> {
 
 export async function getPublicKey(): Promise<{ public_key: string; algorithm: string }> {
   const res = await fetch(`${MANUS_API_BASE}/webhook/public_key`, {
-    headers: { 'Authorization': `Bearer ${config.MANUS_API_KEY}` },
+    headers: { 'API_KEY': config.MANUS_API_KEY },
   });
   if (!res.ok) throw new Error(`Failed to fetch public key: ${res.status}`);
   return res.json();
@@ -240,9 +240,10 @@ import { getTask, downloadAttachment, getPublicKey } from './client';
 import { sendEmail } from '../email/outbound';
 import { config } from '../config';
 
-interface TaskStoppedPayload {
-  event_type: 'task_stopped';
+interface TaskDetail {
   task_id: string;
+  task_title: string;
+  task_url: string;
   message: string;
   stop_reason: 'finish' | 'ask';
   attachments: Array<{
@@ -250,6 +251,12 @@ interface TaskStoppedPayload {
     url: string;
     size_bytes: number;
   }>;
+}
+
+interface TaskStoppedPayload {
+  event_id: string;
+  event_type: 'task_stopped';
+  task_detail: TaskDetail;
 }
 
 // Cache public key (refresh every hour)
@@ -306,21 +313,25 @@ export async function handleManusWebhook(
   }
 
   if (payload.event_type !== 'task_stopped') return;
-  if (payload.stop_reason !== 'finish') {
-    console.log(`Task ${payload.task_id} needs input, skipping`);
+
+  const detail = payload.task_detail;
+  if (!detail) return;
+
+  if (detail.stop_reason !== 'finish') {
+    console.log(`Task ${detail.task_id} needs input, skipping`);
     return;
   }
 
   // Find mapping
-  const mapping = await getMappingByTaskId(payload.task_id);
+  const mapping = await getMappingByTaskId(detail.task_id);
   if (!mapping) {
-    console.error(`No mapping found for task ${payload.task_id}`);
+    console.error(`No mapping found for task ${detail.task_id}`);
     return;
   }
 
   // Download attachments
   const attachments = await Promise.all(
-    payload.attachments.map(async (att) => ({
+    (detail.attachments || []).map(async (att) => ({
       filename: att.file_name,
       content: await downloadAttachment(att.url),
     }))
@@ -331,12 +342,12 @@ export async function handleManusWebhook(
     from: `${mapping.workflow}@${config.FROM_DOMAIN}`,
     to: mapping.original_sender,
     subject: `Re: Your ${mapping.workflow} task`,
-    text: payload.message,
+    text: detail.message,
     attachments,
   });
 
   // Get credit usage from Manus
-  const task = await getTask(payload.task_id);
+  const task = await getTask(detail.task_id);
   const creditsUsed = task.credit_usage || 0;
 
   // Deduct credits

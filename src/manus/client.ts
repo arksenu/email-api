@@ -34,7 +34,7 @@ export async function createTask(req: CreateTaskRequest): Promise<CreateTaskResp
   const res = await fetch(`${MANUS_API_BASE}/tasks`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${config.MANUS_API_KEY}`,
+      'API_KEY': config.MANUS_API_KEY,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -54,7 +54,7 @@ export async function createTask(req: CreateTaskRequest): Promise<CreateTaskResp
 
 export async function getTask(taskId: string): Promise<GetTaskResponse> {
   const res = await fetch(`${MANUS_API_BASE}/tasks/${taskId}`, {
-    headers: { 'Authorization': `Bearer ${config.MANUS_API_KEY}` },
+    headers: { 'API_KEY': config.MANUS_API_KEY },
   });
 
   if (!res.ok) {
@@ -75,7 +75,7 @@ export async function downloadAttachment(url: string): Promise<Buffer> {
 
 export async function getPublicKey(): Promise<PublicKeyResponse> {
   const res = await fetch(`${MANUS_API_BASE}/webhook/public_key`, {
-    headers: { 'Authorization': `Bearer ${config.MANUS_API_KEY}` },
+    headers: { 'API_KEY': config.MANUS_API_KEY },
   });
 
   if (!res.ok) {

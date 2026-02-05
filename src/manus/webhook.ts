@@ -11,12 +11,19 @@ export interface WebhookAttachment {
   size_bytes: number;
 }
 
-export interface TaskStoppedPayload {
-  event_type: 'task_stopped';
+export interface TaskDetail {
   task_id: string;
+  task_title: string;
+  task_url: string;
   message: string;
   stop_reason: 'finish' | 'ask';
   attachments: WebhookAttachment[];
+}
+
+export interface TaskStoppedPayload {
+  event_id: string;
+  event_type: 'task_stopped';
+  task_detail: TaskDetail;
 }
 
 let cachedPublicKey: string | null = null;
@@ -83,19 +90,25 @@ export async function handleManusWebhook(
     return;
   }
 
-  if (payload.stop_reason !== 'finish') {
-    console.log(`Task ${payload.task_id} needs input (stop_reason: ${payload.stop_reason}), skipping`);
+  const detail = payload.task_detail;
+  if (!detail) {
+    console.error('Webhook missing task_detail');
     return;
   }
 
-  const mapping = await getMappingByTaskId(payload.task_id);
+  if (detail.stop_reason !== 'finish') {
+    console.log(`Task ${detail.task_id} needs input (stop_reason: ${detail.stop_reason}), skipping`);
+    return;
+  }
+
+  const mapping = await getMappingByTaskId(detail.task_id);
   if (!mapping) {
-    console.error(`No mapping found for task ${payload.task_id}`);
+    console.error(`No mapping found for task ${detail.task_id}`);
     return;
   }
 
   const attachments = await Promise.all(
-    (payload.attachments || []).map(async (att) => ({
+    (detail.attachments || []).map(async (att) => ({
       filename: att.file_name,
       contentType: 'application/octet-stream',
       content: await downloadAttachment(att.url),
@@ -106,11 +119,11 @@ export async function handleManusWebhook(
     from: `${mapping.workflow}@${config.FROM_DOMAIN}`,
     to: mapping.original_sender,
     subject: `Re: Your ${mapping.workflow} task`,
-    text: payload.message,
+    text: detail.message,
     attachments,
   });
 
-  const task = await getTask(payload.task_id);
+  const task = await getTask(detail.task_id);
   const creditsUsed = task.credit_usage || 0;
 
   const user = await getUserByEmail(mapping.original_sender);
@@ -123,5 +136,5 @@ export async function handleManusWebhook(
 
   await completeMapping(mapping.id, creditsUsed);
 
-  console.log(`Completed task ${payload.task_id} for mapping ${mapping.id}, charged ${creditsUsed} credits`);
+  console.log(`Completed task ${detail.task_id} for mapping ${mapping.id}, charged ${creditsUsed} credits`);
 }

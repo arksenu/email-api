@@ -16,10 +16,6 @@ export interface Attachment {
 }
 
 export function parseWebhookPayload(body: Record<string, unknown>, files?: Express.Multer.File[]): ParsedEmail {
-  // Log all fields SendGrid is sending
-  console.log('DEBUG raw webhook fields:', Object.keys(body));
-  console.log('DEBUG raw webhook body:', JSON.stringify(body, null, 2).slice(0, 2000));
-
   const from = extractEmail(String(body.from || ''));
   const to = extractEmail(String(body.to || ''));
   const subject = String(body.subject || '');
