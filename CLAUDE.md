@@ -1,0 +1,176 @@
+# CLAUDE.md
+
+## System Directive
+
+### Output Behavior
+- No pleasantries, hedging, or affective language
+- No emojis or expressive punctuation
+- No preamble—execute directly
+- No narrating actions before taking them
+- Report completion with affected files/lines only
+
+### Code Output
+- Write code directly
+- Comments only where logic is non-obvious
+- Include imports and dependencies
+
+### Errors
+- State failure and cause
+- Provide fix if known
+- No apologies
+
+### Agent Pipeline
+For significant implementations:
+1. web-researcher → gather external docs/APIs if needed
+2. codebase-navigator → identify relevant code
+3. implementation-planner → create plan using navigator output
+4. main agent → write code
+5. implementation-reviewer → validate against plan
+6. docs-sync → update CHANGELOG.md, README.md, CLAUDE.md
+
+---
+
+## Project Overview
+
+Fly-Bot Email API: TypeScript/Express service that acts as an email proxy for Manus.im workflow automation. Receives emails via SendGrid webhooks, routes to Manus workflows, and relays responses back to senders.
+
+## Technology Stack
+
+- **Runtime**: Node.js 20+
+- **Language**: TypeScript 5.3
+- **Framework**: Express 4.18
+- **Database**: PostgreSQL 16 (pg driver)
+- **Email**: SendGrid (@sendgrid/mail, Inbound Parse webhook)
+- **Parsing**: mailparser, multer
+- **Validation**: Zod
+
+## Project Structure
+
+```
+email-api/
+├── src/
+│   ├── api/
+│   │   └── routes.ts          # Express router with webhook endpoints
+│   ├── db/
+│   │   ├── client.ts          # PostgreSQL connection pool
+│   │   ├── users.ts           # User model and queries
+│   │   ├── workflows.ts       # Workflow model and queries
+│   │   └── mappings.ts        # Email mapping model and queries
+│   ├── email/
+│   │   ├── inbound.ts         # Incoming email handler
+│   │   ├── outbound.ts        # Outgoing email sender
+│   │   ├── parser.ts          # Email parsing utilities
+│   │   ├── response.ts        # Response email handler
+│   │   └── branding.ts        # Email footer branding
+│   ├── config.ts              # Environment variable validation
+│   └── index.ts               # Express application entry point
+├── migrations/
+│   └── 001_initial.sql        # Database schema
+├── scripts/
+│   └── seed-workflows.ts      # Seed Manus workflow configurations
+├── docker-compose.yml         # PostgreSQL + app orchestration
+├── Dockerfile                 # Multi-stage production build
+├── tsconfig.json              # TypeScript compiler options
+└── package.json               # Dependencies and scripts
+```
+
+## Build Commands
+
+```bash
+# Development
+npm install              # Install dependencies
+npm run dev              # Run with ts-node (hot reload not configured)
+
+# Production
+npm run build            # Compile TypeScript to dist/
+npm start                # Run compiled JavaScript
+
+# Database
+npm run migrate          # Apply migrations (requires PostgreSQL)
+npm run seed             # Seed workflow data
+
+# Docker
+docker-compose up        # Start app + PostgreSQL
+docker-compose up -d db  # Start only PostgreSQL
+docker-compose down      # Stop all services
+```
+
+## Database Schema
+
+**users**: id, email (unique), credits, is_approved, created_at
+**workflows**: id, name (unique), manus_address, description, credits_per_task, is_active
+**email_mappings**: id, original_message_id, original_sender, workflow, manus_message_id, status, credits_charged, created_at, completed_at
+**transactions**: id, user_id, credits_delta, reason, email_mapping_id, created_at
+
+## Environment Variables
+
+Required in `.env`:
+- `DATABASE_URL`: PostgreSQL connection string
+- `SENDGRID_API_KEY`: SendGrid API key
+- `FROM_DOMAIN`: Email domain (mail.fly-bot.net)
+- `RELAY_ADDRESS`: Address for Manus responses (relay@mail.fly-bot.net)
+- `PORT`: Server port (default 3000)
+- `NODE_ENV`: development | production
+
+## Architecture Notes
+
+**Email Flow**:
+1. User sends to workflow@mail.fly-bot.net (e.g., research@mail.fly-bot.net)
+2. SendGrid Inbound Parse webhook → POST /webhooks/email/inbound
+3. Validate user (registered, approved, sufficient credits)
+4. Forward to Manus (arksenu-[workflow]@manus.bot) with From: relay@mail.fly-bot.net
+5. Manus sends acknowledgment (skipped by system)
+6. Manus sends completion response to relay@mail.fly-bot.net
+7. Match response to original request, strip branding
+8. Relay cleaned response to original sender
+9. Deduct credits, log transaction
+
+**Credit System**:
+- Users have credit balance
+- Workflows have per-task cost (configured in database)
+- Credits deducted on task completion only
+- Race condition protection prevents double charging
+- Transactions logged for each credit operation
+
+**Approval System**:
+- Users must be approved to send emails
+- Unapproved users receive bounce email
+- Bounce also sent for: unregistered users, insufficient credits, unknown workflows
+
+**Acknowledgment Detection**:
+- System skips Manus "I have received your task" messages
+- Only completion responses are relayed to users
+- Detection based on content patterns in branding.ts
+
+## Current Deployment
+
+**Status**: MVP working, deployed via ngrok (temporary)
+
+**Known Issues**:
+- DEBUG logging present in parser.ts and outbound.ts (temporary)
+- Ngrok URL must be updated in SendGrid when restarted
+- No permanent deployment yet
+
+**Production Requirements**:
+- Permanent server with static IP
+- Update SendGrid webhook URL to production endpoint
+- Remove DEBUG logging
+- Add webhook signature verification
+- Add rate limiting
+- Add monitoring/alerting
+
+## Configuration
+
+**SendGrid**:
+- Inbound Parse domain: mail.fly-bot.net
+- Webhook URL: https://[server]/webhooks/email/inbound
+- Domain authentication: mail.fly-bot.net
+
+**Manus**:
+- Approved sender: relay@mail.fly-bot.net
+- Workflow format: arksenu-[workflow]@manus.bot
+
+**Workflows** (seeded via scripts/seed-workflows.ts):
+- research: 1 credit per task
+- summarize: 1 credit per task
+- newsletter: 2 credits per task
