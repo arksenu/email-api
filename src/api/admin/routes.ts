@@ -8,8 +8,21 @@ import {
   updateUser,
   deleteUser,
   addCredits,
+  sanitizeUser,
 } from '../../db/users';
-import { getAllWorkflows, getWorkflowById, updateWorkflow } from '../../db/workflows';
+import {
+  getAllWorkflows,
+  getWorkflowById,
+  isWorkflowNameTaken,
+  updateWorkflow,
+  createWorkflow,
+  deleteWorkflow,
+} from '../../db/workflows';
+import {
+  getApprovedSenders,
+  addApprovedSender,
+  removeApprovedSender,
+} from '../../db/approvedSenders';
 import { getAllMappings, getMappingById } from '../../db/mappings';
 import { getAllTransactions } from '../../db/transactions';
 import { query, queryOne } from '../../db/client';
@@ -100,7 +113,7 @@ adminRouter.get('/users', async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 20;
     const result = await getAllUsers(page, pageSize);
-    res.json(result);
+    res.json({ ...result, data: result.data.map(sanitizeUser) });
   } catch (err) {
     console.error('Get users error:', err);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -115,7 +128,7 @@ adminRouter.get('/users/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (err) {
     console.error('Get user error:', err);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -130,7 +143,7 @@ adminRouter.post('/users', async (req: Request, res: Response) => {
       return;
     }
     const user = await createUser(email, credits || 0, is_approved || false);
-    res.status(201).json(user);
+    res.status(201).json(sanitizeUser(user));
   } catch (err: any) {
     if (err.code === '23505') {
       res.status(409).json({ error: 'Email already exists' });
@@ -150,7 +163,7 @@ adminRouter.patch('/users/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (err: any) {
     if (err.code === '23505') {
       res.status(409).json({ error: 'Email already exists' });
@@ -189,7 +202,7 @@ adminRouter.post('/users/:id/credits', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+    res.json(sanitizeUser(user));
   } catch (err) {
     console.error('Add credits error:', err);
     res.status(500).json({ error: 'Failed to add credits' });
@@ -222,11 +235,44 @@ adminRouter.get('/workflows/:id', async (req: Request, res: Response) => {
   }
 });
 
+adminRouter.post('/workflows', async (req: Request, res: Response) => {
+  try {
+    const { name, description, instruction, credits_per_task, is_public } = req.body;
+
+    if (!name) {
+      res.status(400).json({ error: 'Name required' });
+      return;
+    }
+
+    const taken = await isWorkflowNameTaken(name);
+    if (taken) {
+      res.status(409).json({ error: 'Workflow name already exists' });
+      return;
+    }
+
+    const workflow = await createWorkflow({
+      name: name.toLowerCase(),
+      manus_address: 'arksenu@manus.bot',
+      description,
+      instruction,
+      credits_per_task: credits_per_task || 10,
+      is_public: is_public ?? true,
+      type: 'official',
+      created_by_user_id: null,
+    });
+
+    res.status(201).json(workflow);
+  } catch (err) {
+    console.error('Create workflow error:', err);
+    res.status(500).json({ error: 'Failed to create workflow' });
+  }
+});
+
 adminRouter.patch('/workflows/:id', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { name, manus_address, description, credits_per_task, is_active } = req.body;
-    const workflow = await updateWorkflow(id, { name, manus_address, description, credits_per_task, is_active });
+    const { name, manus_address, description, instruction, credits_per_task, is_active, is_public } = req.body;
+    const workflow = await updateWorkflow(id, { name, manus_address, description, instruction, credits_per_task, is_active, is_public });
     if (!workflow) {
       res.status(404).json({ error: 'Workflow not found' });
       return;
@@ -235,6 +281,70 @@ adminRouter.patch('/workflows/:id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Update workflow error:', err);
     res.status(500).json({ error: 'Failed to update workflow' });
+  }
+});
+
+adminRouter.delete('/workflows/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const workflow = await getWorkflowById(id);
+
+    if (!workflow) {
+      res.status(404).json({ error: 'Workflow not found' });
+      return;
+    }
+    if (workflow.type === 'native') {
+      res.status(403).json({ error: 'Cannot delete native workflows' });
+      return;
+    }
+
+    await deleteWorkflow(id);
+    res.status(204).send();
+  } catch (err) {
+    console.error('Delete workflow error:', err);
+    res.status(500).json({ error: 'Failed to delete workflow' });
+  }
+});
+
+// Approved senders
+adminRouter.get('/workflows/:id/senders', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const senders = await getApprovedSenders(id);
+    res.json(senders);
+  } catch (err) {
+    console.error('Get approved senders error:', err);
+    res.status(500).json({ error: 'Failed to fetch approved senders' });
+  }
+});
+
+adminRouter.post('/workflows/:id/senders', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ error: 'Email required' });
+      return;
+    }
+
+    const sender = await addApprovedSender(id, email);
+    res.status(201).json(sender);
+  } catch (err) {
+    console.error('Add approved sender error:', err);
+    res.status(500).json({ error: 'Failed to add approved sender' });
+  }
+});
+
+adminRouter.delete('/workflows/:id/senders/:email', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const email = decodeURIComponent(req.params.email);
+    await removeApprovedSender(id, email);
+    res.status(204).send();
+  } catch (err) {
+    console.error('Remove approved sender error:', err);
+    res.status(500).json({ error: 'Failed to remove approved sender' });
   }
 });
 

@@ -5,7 +5,7 @@ export interface EmailMapping {
   original_message_id: string | null;
   original_sender: string;
   workflow: string;
-  manus_message_id: string | null;
+  manus_task_id: string | null;
   status: string;
   credits_charged: number | null;
   created_at: Date;
@@ -82,6 +82,33 @@ export async function getAllMappings(
   };
 }
 
+export async function getMappingsByUser(
+  email: string,
+  page: number = 1,
+  pageSize: number = 20
+): Promise<PaginatedResult<EmailMapping>> {
+  const offset = (page - 1) * pageSize;
+
+  const countResult = await queryOne<{ count: string }>(
+    'SELECT COUNT(*) as count FROM email_mappings WHERE LOWER(original_sender) = $1',
+    [email.toLowerCase()]
+  );
+  const total = parseInt(countResult?.count || '0', 10);
+
+  const data = await query<EmailMapping>(
+    `SELECT * FROM email_mappings WHERE LOWER(original_sender) = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+    [email.toLowerCase(), pageSize, offset]
+  );
+
+  return {
+    data,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
 export async function createMapping(
   originalMessageId: string | null,
   originalSender: string,
@@ -100,6 +127,13 @@ export async function getMappingByMessageId(messageId: string): Promise<EmailMap
   return queryOne<EmailMapping>(
     'SELECT * FROM email_mappings WHERE original_message_id = $1',
     [messageId]
+  );
+}
+
+export async function getMappingByTaskId(taskId: string): Promise<EmailMapping | null> {
+  return queryOne<EmailMapping>(
+    'SELECT * FROM email_mappings WHERE manus_task_id = $1',
+    [taskId]
   );
 }
 
@@ -128,9 +162,29 @@ export async function updateMappingStatus(
   }
 }
 
-export async function updateManusMessageId(id: number, manusMessageId: string): Promise<void> {
+export async function updateManusTaskId(id: number, taskId: string): Promise<void> {
   await query(
-    'UPDATE email_mappings SET manus_message_id = $1 WHERE id = $2',
-    [manusMessageId, id]
+    'UPDATE email_mappings SET manus_task_id = $1 WHERE id = $2',
+    [taskId, id]
   );
+}
+
+export async function claimMapping(id: number): Promise<boolean> {
+  const rows = await query<EmailMapping>(
+    `UPDATE email_mappings SET status = 'processing'
+     WHERE id = $1 AND status NOT IN ('processing', 'completed')
+     RETURNING id`,
+    [id]
+  );
+  return rows.length > 0;
+}
+
+export async function completeMapping(id: number, creditsCharged: number): Promise<boolean> {
+  const rows = await query<EmailMapping>(
+    `UPDATE email_mappings SET status = 'completed', credits_charged = $1, completed_at = NOW()
+     WHERE id = $2 AND status != 'completed'
+     RETURNING id`,
+    [creditsCharged, id]
+  );
+  return rows.length > 0;
 }

@@ -1,4 +1,7 @@
+import bcrypt from 'bcrypt';
 import { query, queryOne } from './client';
+
+const SALT_ROUNDS = 10;
 
 export interface User {
   id: number;
@@ -6,6 +9,14 @@ export interface User {
   credits: number;
   is_approved: boolean;
   created_at: Date;
+  password_hash: string | null;
+}
+
+export type SafeUser = Omit<User, 'password_hash'>;
+
+export function sanitizeUser<T extends User>(user: T): Omit<T, 'password_hash'> {
+  const { password_hash, ...safe } = user;
+  return safe;
 }
 
 export interface UserStats extends User {
@@ -154,5 +165,32 @@ export async function createTransaction(
   await query(
     'INSERT INTO transactions (user_id, credits_delta, reason, email_mapping_id) VALUES ($1, $2, $3, $4)',
     [userId, creditsDelta, reason, emailMappingId ?? null]
+  );
+}
+
+export async function createUserWithPassword(
+  email: string,
+  password: string,
+  credits: number = 0,
+  isApproved: boolean = false
+): Promise<User> {
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const result = await queryOne<User>(
+    'INSERT INTO users (email, password_hash, credits, is_approved) VALUES ($1, $2, $3, $4) RETURNING *',
+    [email.toLowerCase(), passwordHash, credits, isApproved]
+  );
+  return result!;
+}
+
+export async function verifyUserPassword(user: User, password: string): Promise<boolean> {
+  if (!user.password_hash) return false;
+  return bcrypt.compare(password, user.password_hash);
+}
+
+export async function setUserPassword(userId: number, password: string): Promise<void> {
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  await query(
+    'UPDATE users SET password_hash = $1 WHERE id = $2',
+    [passwordHash, userId]
   );
 }

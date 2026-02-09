@@ -133,21 +133,50 @@ export async function adjustCredits(id: number, amount: number, reason: string):
 }
 
 // Workflows
+export type WorkflowType = 'native' | 'official' | 'community';
+
 export interface Workflow {
   id: number;
   name: string;
   manus_address: string;
   description: string | null;
+  instruction: string | null;
   credits_per_task: number;
   is_active: boolean;
+  type: WorkflowType;
+  is_public: boolean;
+  created_by_user_id: number | null;
+  created_at: string;
   total_tasks?: number;
   pending_tasks?: number;
   completed_tasks?: number;
   total_credits_earned?: number;
 }
 
+export interface ApprovedSender {
+  id: number;
+  workflow_id: number;
+  email: string;
+  created_at: string;
+}
+
+export interface CreateWorkflowPayload {
+  name: string;
+  description?: string;
+  instruction?: string;
+  credits_per_task?: number;
+  is_public?: boolean;
+}
+
 export async function getWorkflows(): Promise<Workflow[]> {
   return request<Workflow[]>('/workflows');
+}
+
+export async function createWorkflow(data: CreateWorkflowPayload): Promise<Workflow> {
+  return request<Workflow>('/workflows', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function updateWorkflow(id: number, data: Partial<Workflow>): Promise<Workflow> {
@@ -157,13 +186,34 @@ export async function updateWorkflow(id: number, data: Partial<Workflow>): Promi
   });
 }
 
+export async function deleteWorkflow(id: number): Promise<void> {
+  await request(`/workflows/${id}`, { method: 'DELETE' });
+}
+
+export async function getApprovedSenders(workflowId: number): Promise<ApprovedSender[]> {
+  return request<ApprovedSender[]>(`/workflows/${workflowId}/senders`);
+}
+
+export async function addApprovedSender(workflowId: number, email: string): Promise<ApprovedSender> {
+  return request<ApprovedSender>(`/workflows/${workflowId}/senders`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function removeApprovedSender(workflowId: number, email: string): Promise<void> {
+  await request(`/workflows/${workflowId}/senders/${encodeURIComponent(email)}`, {
+    method: 'DELETE',
+  });
+}
+
 // Mappings
 export interface Mapping {
   id: number;
   original_message_id: string | null;
   original_sender: string;
   workflow: string;
-  manus_message_id: string | null;
+  manus_task_id: string | null;
   status: string;
   credits_charged: number | null;
   created_at: string;

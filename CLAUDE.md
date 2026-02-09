@@ -51,16 +51,20 @@ email-api/
 ├── src/
 │   ├── api/
 │   │   ├── routes.ts          # Express router with webhook endpoints
-│   │   └── admin/
-│   │       ├── routes.ts      # Admin API endpoints
-│   │       └── middleware.ts  # JWT auth middleware
+│   │   ├── admin/
+│   │   │   ├── routes.ts      # Admin API endpoints
+│   │   │   └── middleware.ts  # JWT auth middleware (24h expiry)
+│   │   └── user/
+│   │       ├── routes.ts      # User API endpoints
+│   │       └── middleware.ts  # JWT auth middleware (7-day expiry)
 │   ├── db/
 │   │   ├── client.ts          # PostgreSQL connection pool
 │   │   ├── users.ts           # User model and queries
 │   │   ├── workflows.ts       # Workflow model and queries
 │   │   ├── mappings.ts        # Email mapping model and queries
 │   │   ├── admins.ts          # Admin authentication model
-│   │   └── transactions.ts    # Transaction query functions
+│   │   ├── approvedSenders.ts # Approved sender model and queries
+│   │   └── transactions.ts    # Transaction query functions (with pagination)
 │   ├── email/
 │   │   ├── inbound.ts         # Incoming email handler
 │   │   ├── outbound.ts        # Outgoing email sender
@@ -76,12 +80,22 @@ email-api/
 │   │   └── lib/api.ts         # API client with JWT auth
 │   ├── package.json
 │   └── vite.config.ts
+├── portal/                    # React user portal (Vite)
+│   ├── src/
+│   │   ├── pages/             # Login, Register, Dashboard, Directory, MyWorkflows, Account
+│   │   ├── components/        # Layout, TypeBadge, WorkflowCard
+│   │   └── lib/api.ts         # API client with JWT auth
+│   ├── package.json
+│   └── vite.config.ts
 ├── migrations/
 │   ├── 001_initial.sql        # Database schema
-│   └── 002_admin.sql          # Admin table
+│   ├── 002_admin.sql          # Admin table
+│   └── 003_custom_workflows.sql # Community workflows and approved senders
 ├── scripts/
 │   ├── seed-workflows.ts      # Seed Manus workflow configurations
-│   └── seed-admin.ts          # Create initial admin user
+│   ├── seed-admin.ts          # Create initial admin user
+│   ├── dev.sh                 # Start database + backend
+│   └── dev-all.sh             # Start database + backend + admin + portal
 ├── docker-compose.yml         # PostgreSQL + app orchestration
 ├── Dockerfile                 # Multi-stage production build
 ├── tsconfig.json              # TypeScript compiler options
@@ -92,33 +106,40 @@ email-api/
 
 ```bash
 # Development
-npm install              # Install dependencies
-npm run dev              # Run backend with ts-node
-cd admin && npm install  # Install admin frontend dependencies
-npm run dev:admin        # Run admin frontend dev server (port 5173)
+npm install                # Install dependencies
+npm run dev                # Run backend only with ts-node
+npm run dev:backend        # Run database + backend (via scripts/dev.sh)
+npm run dev:all            # Run database + backend + admin + portal (via scripts/dev-all.sh)
+cd admin && npm install    # Install admin frontend dependencies
+npm run dev:admin          # Run admin frontend dev server (port 5173)
+cd portal && npm install   # Install portal frontend dependencies
+npm run dev:portal         # Run portal frontend dev server (port 5174)
 
 # Production
-npm run build            # Compile backend + admin frontend
-npm start                # Run compiled JavaScript
+npm run build              # Compile backend + admin + portal frontends
+npm run build:admin        # Build admin frontend only
+npm run build:portal       # Build portal frontend only
+npm start                  # Run compiled JavaScript
 
 # Database
-npm run migrate          # Apply all migrations (requires PostgreSQL)
-npm run seed             # Seed workflow data
-npm run seed:admin       # Create admin user (set ADMIN_PASSWORD env var)
+npm run migrate            # Apply all migrations (requires PostgreSQL)
+npm run seed               # Seed workflow data
+npm run seed:admin         # Create admin user (set ADMIN_PASSWORD env var)
 
 # Docker
-docker-compose up        # Start app + PostgreSQL
-docker-compose up -d db  # Start only PostgreSQL
-docker-compose down      # Stop all services
+docker-compose up          # Start app + PostgreSQL
+docker-compose up -d db    # Start only PostgreSQL
+docker-compose down        # Stop all services
 ```
 
 ## Database Schema
 
-**users**: id, email (unique), credits, is_approved, created_at
-**workflows**: id, name (unique), manus_address, description, credits_per_task, is_active
+**users**: id, email (unique), credits, is_approved, created_at, password_hash
+**workflows**: id, name (unique), manus_address, description, instruction, credits_per_task, is_active, type (native/official/community), is_public, created_by_user_id
 **email_mappings**: id, original_message_id, original_sender, workflow, manus_message_id, status, credits_charged, created_at, completed_at
 **transactions**: id, user_id, credits_delta, reason, email_mapping_id, created_at
 **admins**: id, username (unique), password_hash, created_at
+**approved_senders**: id, workflow_id, email, created_by_user_id, created_at
 
 ## Environment Variables
 
@@ -224,3 +245,41 @@ Required in `.env`:
 - Backend: Express + JWT (jsonwebtoken, bcrypt)
 - Frontend: React 18 + Vite + react-router-dom
 - Auth: Bearer token in Authorization header, 24h expiry
+
+## User Portal
+
+**URL**: http://localhost:3000/portal (or /portal on production, localhost:5174/portal in dev)
+
+**Features**:
+- Registration: Users can register, pending admin approval
+- Login: JWT authentication with 7-day token expiry
+- Dashboard: Account overview with credits, approval status, and stats
+- Directory: Browse public workflows (native, official, community)
+- MyWorkflows: Create and manage community workflows with API method support
+- Account: View usage history and transaction log (paginated)
+- Approved Senders: Manage approved email addresses for private workflows
+
+**Pages**:
+- /portal/login - User login
+- /portal/register - User registration
+- /portal/dashboard - Account overview
+- /portal/directory - Browse public workflows
+- /portal/my-workflows - Manage community workflows
+- /portal/account - Usage history and transactions
+
+**API Endpoints** (all prefixed with /api):
+- POST /auth/register - Register new user
+- POST /auth/login - Get JWT token (7-day expiry)
+- GET /auth/me - Current user profile
+- GET /account - User account details
+- GET /account/usage - Email task history (paginated)
+- GET /account/transactions - Credit transaction log (paginated)
+- GET /workflows/directory - Public workflows
+- GET/POST/PATCH/DELETE /workflows - Community workflow CRUD
+- GET /workflows/mine - User's own workflows
+- GET/POST/DELETE /workflows/:id/senders - Approved sender management
+
+**Tech Stack**:
+- Backend: Express + JWT (7-day expiry)
+- Frontend: React 18 + Vite + react-router-dom
+- Auth: Bearer token stored in localStorage (portal_token)
