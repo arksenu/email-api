@@ -19,6 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Development scripts: scripts/dev.sh (db + backend), scripts/dev-all.sh (db + backend + admin + portal)
 - Portal served at /portal in production, localhost:5174/portal in development
 - Pagination support for getTransactionsByUser in src/db/transactions.ts
+- SafeUser type in src/db/users.ts for API responses without password_hash exposure
+- claimMapping function in src/db/mappings.ts for atomic webhook claim processing
+- Manus webhook signature and timestamp validation in src/manus/webhook.ts
+- express.raw middleware for /webhooks/manus endpoint in src/index.ts
+- Error handling for sender management in admin/src/pages/Workflows.tsx
 
 ### Changed
 - src/index.ts now serves user portal static files and user API routes
@@ -26,6 +31,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - PATCH /admin/api/workflows/:id endpoint accepts name and manus_address updates
 - Workflows page displays editable form fields for name and manus_address
 - Vite proxy configuration updated to target backend on port 3001
+- npm run migrate uses portable psql $DATABASE_URL instead of hardcoded Docker container
+- npm run build:admin includes npm install before build step
+- Workflow creation/update uses isWorkflowNameTaken for conflict detection
+- Manus webhook processing uses atomic claimMapping instead of racy status check
+- completeMapping returns boolean with atomic WHERE clause to prevent double-completion
+
+### Fixed
+- Password hash leak in admin API user endpoints (all 6 endpoints now sanitize responses)
+- Manus webhook header bypass vulnerability (missing signature/timestamp validation)
+- Race condition in webhook processing (TOCTOU bug in status checking)
+- Workflow rename conflict detection missing inactive workflows
+- Missing credits_per_task validation (now requires positive integer)
+- Portal dependency installation in Dockerfile (added npm ci for portal)
+- Admin workflow sender management error handling (added try-catch)
 
 ## [1.0.0] - 2026-02-04
 

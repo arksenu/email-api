@@ -42,7 +42,7 @@ Currently running on **ngrok** (temporary). Webhook URL must be updated in SendG
 ### Not Implemented (Future Phases)
 
 - Stripe payment integration for purchasing credits
-- Webhook signature verification (SendGrid signed events)
+- SendGrid webhook signature verification (Inbound Parse signed events)
 - Retry logic for failed email sends
 - Dead letter queue for unmatched responses
 - Rate limiting on webhook endpoint
@@ -73,8 +73,8 @@ Currently running on **ngrok** (temporary). Webhook URL must be updated in SendG
 3. System validates user (registered, approved, sufficient credits)
 4. Email forwarded to Manus workflow (e.g., arksenu-research@manus.bot) with From: relay@mail.fly-bot.net
 5. Manus processes task and sends acknowledgment (skipped by system)
-6. Manus sends completion response to relay@mail.fly-bot.net
-7. System matches response to original request via In-Reply-To header or Mapping ID
+6. Manus webhook (POST /webhooks/manus) delivers completion event with signature verification
+7. System atomically claims mapping to prevent duplicate processing
 8. System strips Manus branding and relays cleaned response to original sender
 9. Credits deducted from user account, transaction logged
 
@@ -115,7 +115,7 @@ npm install
 # Start PostgreSQL (via Docker)
 docker-compose up -d db
 
-# Run migrations
+# Run migrations (requires DATABASE_URL env variable)
 npm run migrate
 
 # Seed workflow data
@@ -193,7 +193,7 @@ docker compose exec db psql -U flybot -d flybot -c "SELECT email, credits FROM u
 
 - `npm install` - Install dependencies
 - `npm run build` - Compile TypeScript + build admin + portal frontends
-- `npm run build:admin` - Build admin frontend only
+- `npm run build:admin` - Build admin frontend only (includes npm install)
 - `npm run build:portal` - Build portal frontend only
 - `npm run dev` - Run backend only with ts-node
 - `npm run dev:backend` - Run database + backend (via scripts/dev.sh)
@@ -201,7 +201,7 @@ docker compose exec db psql -U flybot -d flybot -c "SELECT email, credits FROM u
 - `npm run dev:admin` - Run admin frontend dev server (port 5173)
 - `npm run dev:portal` - Run portal frontend dev server (port 5174)
 - `npm start` - Run compiled production server
-- `npm run migrate` - Run database migrations
+- `npm run migrate` - Run database migrations (uses psql $DATABASE_URL)
 - `npm run seed` - Seed workflow data (creates research, summarize, newsletter workflows)
 - `npm run seed:admin` - Create admin user (set ADMIN_PASSWORD env var)
 - `docker-compose up` - Start with Docker (app + PostgreSQL)

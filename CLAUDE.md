@@ -52,16 +52,16 @@ email-api/
 │   ├── api/
 │   │   ├── routes.ts          # Express router with webhook endpoints
 │   │   ├── admin/
-│   │   │   ├── routes.ts      # Admin API endpoints
+│   │   │   ├── routes.ts      # Admin API endpoints (SafeUser responses)
 │   │   │   └── middleware.ts  # JWT auth middleware (24h expiry)
 │   │   └── user/
-│   │       ├── routes.ts      # User API endpoints
+│   │       ├── routes.ts      # User API endpoints (workflow validation)
 │   │       └── middleware.ts  # JWT auth middleware (7-day expiry)
 │   ├── db/
 │   │   ├── client.ts          # PostgreSQL connection pool
-│   │   ├── users.ts           # User model and queries
+│   │   ├── users.ts           # User model and queries (SafeUser type)
 │   │   ├── workflows.ts       # Workflow model and queries
-│   │   ├── mappings.ts        # Email mapping model and queries
+│   │   ├── mappings.ts        # Email mapping model and queries (atomic claim)
 │   │   ├── admins.ts          # Admin authentication model
 │   │   ├── approvedSenders.ts # Approved sender model and queries
 │   │   └── transactions.ts    # Transaction query functions (with pagination)
@@ -71,8 +71,10 @@ email-api/
 │   │   ├── parser.ts          # Email parsing utilities
 │   │   ├── response.ts        # Response email handler
 │   │   └── branding.ts        # Email footer branding
+│   ├── manus/
+│   │   └── webhook.ts         # Manus webhook handler (signature validation)
 │   ├── config.ts              # Environment variable validation
-│   └── index.ts               # Express application entry point
+│   └── index.ts               # Express application entry point (raw middleware)
 ├── admin/                     # React admin frontend (Vite)
 │   ├── src/
 │   │   ├── pages/             # Login, Dashboard, Users, Workflows, Activity
@@ -117,12 +119,12 @@ npm run dev:portal         # Run portal frontend dev server (port 5174)
 
 # Production
 npm run build              # Compile backend + admin + portal frontends
-npm run build:admin        # Build admin frontend only
+npm run build:admin        # Build admin frontend only (includes npm install)
 npm run build:portal       # Build portal frontend only
 npm start                  # Run compiled JavaScript
 
 # Database
-npm run migrate            # Apply all migrations (requires PostgreSQL)
+npm run migrate            # Apply all migrations (uses psql $DATABASE_URL)
 npm run seed               # Seed workflow data
 npm run seed:admin         # Create admin user (set ADMIN_PASSWORD env var)
 
@@ -161,17 +163,24 @@ Required in `.env`:
 3. Validate user (registered, approved, sufficient credits)
 4. Forward to Manus (arksenu-[workflow]@manus.bot) with From: relay@mail.fly-bot.net
 5. Manus sends acknowledgment (skipped by system)
-6. Manus sends completion response to relay@mail.fly-bot.net
-7. Match response to original request, strip branding
-8. Relay cleaned response to original sender
-9. Deduct credits, log transaction
+6. Manus webhook → POST /webhooks/manus (signature + timestamp validated)
+7. System atomically claims mapping via claimMapping (prevents duplicate processing)
+8. Strip Manus branding, relay response to original sender
+9. Deduct credits atomically, log transaction
 
 **Credit System**:
 - Users have credit balance
-- Workflows have per-task cost (configured in database)
+- Workflows have per-task cost (configured in database, validated positive integer)
 - Credits deducted on task completion only
-- Race condition protection prevents double charging
+- Atomic mapping claim and completion prevent race conditions
 - Transactions logged for each credit operation
+
+**Security**:
+- User password hashes never exposed in API responses (SafeUser type)
+- Manus webhook signature and timestamp validation prevent unauthorized access
+- Atomic database operations prevent TOCTOU race conditions
+- JWT authentication for admin (24h) and user (7-day) sessions
+- Workflow name uniqueness enforced including inactive workflows
 
 **Approval System**:
 - Users must be approved to send emails
@@ -196,7 +205,7 @@ Required in `.env`:
 - Permanent server with static IP
 - Update SendGrid webhook URL to production endpoint
 - Remove DEBUG logging
-- Add webhook signature verification
+- Add SendGrid Inbound Parse webhook signature verification
 - Add rate limiting
 - Add monitoring/alerting
 
@@ -234,7 +243,7 @@ Required in `.env`:
 **API Endpoints** (all prefixed with /admin/api):
 - POST /auth/login - Get JWT token
 - GET /stats - Dashboard statistics
-- GET/POST/PATCH/DELETE /users - User CRUD
+- GET/POST/PATCH/DELETE /users - User CRUD (responses sanitized, no password_hash)
 - POST /users/:id/credits - Adjust credits
 - GET /workflows - List all workflows
 - PATCH /workflows/:id - Update workflow (name, manus_address, credits_per_task, description, is_active)
